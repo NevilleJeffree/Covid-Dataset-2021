@@ -1,0 +1,150 @@
+/*
+Title: World Covid 2021 Dataset Analysis 
+Name: Neville Jeffree
+Data Source: https://ourworldindata.org/covid-deaths
+*/
+
+SELECT *
+FROM `personal-projects-321208.Covid_DataSets.Death`
+WHERE continent IS NOT NULL
+
+--Select data to be used
+SELECT location, date, total_cases, new_cases, total_deaths, population
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+ORDER BY 1,2
+
+SELECT location, date, total_cases, total_deaths, (total_cases/total_deaths)*100 AS DeathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+
+---Total cases vs total deaths
+SELECT location, date, total_cases, total_deaths, (total_cases/total_deaths)*100 AS DeathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+ORDER BY 1,2
+
+---Total cases vs total deaths in Malaysia
+SELECT location, date, total_cases, total_deaths, (total_deaths/total_cases)*100 AS DeathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE location LIKE '%Malaysia%'
+ORDER BY 1,2
+
+---Countries with Highest Infection Rate compare to population
+SELECT location, population, MAX(total_cases) AS highest_num_of_case, MAX((total_cases/population))*100 AS InfectedPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+GROUP BY location, population
+ORDER BY InfectedPercent DESC
+
+---Countries with highest death count per population
+SELECT location, population, MAX(total_deaths) AS highest_num_of_death, MAX((total_deaths/population))*100 AS deathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NOT NULL
+GROUP BY location, population
+ORDER BY deathPercent DESC
+
+---Countries with highest death count per population
+SELECT location, MAX(total_deaths) AS highest_num_of_death
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NOT NULL
+GROUP BY location
+ORDER BY highest_num_of_death DESC
+
+---Break down highest death count by continent
+SELECT continent, MAX(total_deaths) AS highest_num_of_death
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NOT NULL
+GROUP BY continent
+ORDER BY highest_num_of_death DESC
+
+---Break down highest death count by location
+SELECT location, MAX(total_deaths) AS highest_num_of_death
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NULL
+GROUP BY location
+ORDER BY highest_num_of_death DESC
+
+---GLOBAL NUMBERS
+SELECT date, SUM(new_cases) AS total_newCases, SUM(new_deaths) AS total_newDeath, (SUM(new_deaths)/SUM(new_cases))*100 AS deathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NOT NULL
+GROUP BY date
+ORDER BY date
+
+SELECT SUM(new_cases) AS total_newCases, SUM(new_deaths) AS total_newDeath, (SUM(new_deaths)/SUM(new_cases))*100 AS deathPercent
+FROM `personal-projects-321208.Covid_DataSets.Death` 
+WHERE continent IS NOT NULL
+
+---Second Commit
+---Check out Vaccination table
+SELECT *
+FROM `personal-projects-321208.Covid_DataSets.vaccination`
+
+---Join both tables
+SELECT *
+FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+ON DTH.location = VC.location AND DTH.date = VC.date
+
+---Total Population vs Vaccination
+SELECT DTH.continent, DTH.location, DTH.date, DTH.population, VC.new_vaccinations, SUM(VC.new_vaccinations) OVER (PARTITION BY DTH.location ORDER BY DTH.location, DTH.date) AS RollingPeopleVacc
+FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+ON DTH.location = VC.location AND DTH.date = VC.date
+WHERE DTH.continent IS NOT NULL
+ORDER BY 2,3
+
+---Use CTE (Temp table)
+WITH PopVsVac
+AS ( 
+    SELECT DTH.continent, DTH.location, DTH.date, DTH.population, VC.new_vaccinations, SUM(VC.new_vaccinations) OVER (PARTITION BY DTH.location ORDER BY DTH.location, DTH.date) AS RollingPeopleVacc
+    FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+    JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+    ON DTH.location = VC.location AND DTH.date = VC.date
+    WHERE DTH.continent IS NOT NULL
+    ORDER BY 2,3
+)
+SELECT * FROM PopVsVac;
+
+---Find percentage of Rolling Vaccinated people with population
+WITH PopVsVac
+AS ( 
+    SELECT DTH.continent, DTH.location, DTH.date, DTH.population, VC.new_vaccinations, SUM(VC.new_vaccinations) OVER (PARTITION BY DTH.location ORDER BY DTH.location, DTH.date) AS RollingPeopleVacc
+    FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+    JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+    ON DTH.location = VC.location AND DTH.date = VC.date
+    WHERE DTH.continent IS NOT NULL
+    ORDER BY 2,3
+)
+SELECT *, (RollingPeopleVacc/population)*100 FROM PopVsVac;
+
+---Create temp table
+CREATE TABLE `personal-projects-321208.Covid_DataSets.PercentPopulationVaccinated` (
+    continent STRING,
+    location STRING,
+    date DATE,
+    population INTEGER,
+    new_vaccinations INTEGER,
+    RollingPeopleVacc FLOAT64
+)
+
+---Insert values into temp table
+INSERT INTO `personal-projects-321208.Covid_DataSets.PercentPopulationVaccinated`(
+SELECT DTH.continent, DTH.location, DTH.date, DTH.population, VC.new_vaccinations, SUM(VC.new_vaccinations) OVER (PARTITION BY DTH.location ORDER BY DTH.location, DTH.date) AS RollingPeopleVacc
+    FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+    JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+    ON DTH.location = VC.location AND DTH.date = VC.date
+    WHERE DTH.continent IS NOT NULL
+    ORDER BY 2,3
+)
+
+DROP TABLE IF EXISTS `personal-projects-321208.Covid_DataSets.PercentPopulationVaccinated`
+
+---Create a view table
+CREATE VIEW `personal-projects-321208.Covid_DataSets.PercentPopulationVaccinated` (continent, location, date, population, new_vaccinations, RollingPeopleVacc) AS
+SELECT DTH.continent, DTH.location, DTH.date, DTH.population, VC.new_vaccinations, SUM(VC.new_vaccinations) OVER (PARTITION BY DTH.location ORDER BY DTH.location, DTH.date) AS RollingPeopleVacc
+FROM `personal-projects-321208.Covid_DataSets.Death` DTH
+JOIN `personal-projects-321208.Covid_DataSets.vaccination` VC
+ON DTH.location = VC.location AND DTH.date = VC.date
+WHERE DTH.continent IS NOT NULL
+ORDER BY 2,3;
+
+SELECT * FROM `personal-projects-321208.Covid_DataSets.PercentPopulationVaccinated`
+
